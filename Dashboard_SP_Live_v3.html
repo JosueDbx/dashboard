@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard Mesa de Ayuda — SharePoint Live</title>
+  <link id="dt-css" rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css"/>
+  <style>
+    :root{ --bg:#08152b; --panel:#0c2344; --card:#0b1e3a; --bd:#143055; --txt:#e7eefc; --muted:#a9c0ea; --pri:#64a3ff; --kpi:#0d2140; --tblRow:#0b1e3a; --tblRowAlt:#0a1a33; --err:#ef4444; --ok:#22c55e; --warn:#f59e0b }
+    html, body { background: var(--bg); color: var(--txt); }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 20px; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .h1 {font-size: 24px; font-weight:800; margin: 0}
+    .panel { display:flex; gap:10px; align-items:center; background:var(--panel); border:1px solid var(--bd); padding:10px; border-radius:10px; margin: 10px 0 16px 0; }
+    .panel small { color:var(--muted) }
+    .input, .btn, select { padding:8px 10px; background:var(--panel); color:var(--txt); border:1px solid var(--bd); border-radius:8px; }
+    .btn{ cursor:pointer }
+    .ok{ color:#86efac }
+    .err{ color:#fecaca }
+    .muted{ color:var(--muted) }
+    .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:12px 0}
+    .kpi{background:var(--kpi);border:1px solid var(--bd);border-radius:10px;padding:12px}
+    .kpi h2{margin:0;font-size:28px}
+    .kpi p{margin:4px 0 0;color:var(--muted)}
+    .charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+    .card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:12px}
+    canvas{max-height:340px}
+    table.dataTable thead th { white-space: nowrap; color:var(--txt); }
+    table.dataTable { color:var(--txt); }
+    table.dataTable tbody tr { background: var(--tblRow); }
+    table.dataTable tbody tr:nth-child(odd) { background: var(--tblRowAlt); }
+    .diag{font-size:12px}
+  </style>
+</head>
+<body>
+  <div class="row" style="justify-content:space-between;align-items:center">
+    <div class="row" style="gap:8px;align-items:center">
+      <div id="titleText" class="h1">Dashboard Mesa de Ayuda — SharePoint Live</div>
+    </div>
+    <div class="row">
+      <input id="titleInput" class="input" placeholder="Editar título…"/>
+      <button class="btn" id="btnTitle">Aplicar</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="row" style="gap:8px;flex:1 1 auto">
+      <input id="dataUrl" class="input" style="min-width:340px;flex:1" placeholder="Pega aquí la URL directa de records.json (…/records.json?download=1)"/>
+      <button class="btn" id="btnSaveUrl">Guardar URL</button>
+      <button class="btn" id="btnLoad">Cargar ahora</button>
+      <button class="btn" id="btnSample">Cargar muestra</button>
+    </div>
+    <small id="status" class="muted">Listo</small>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi"><h2 id="kpiTickets">0</h2><p>Total de renglones</p></div>
+    <div class="kpi"><h2 id="kpiHoras">0.0</h2><p>Horas totales</p></div>
+    <div class="kpi"><h2 id="kpiFunc">0.0</h2><p>Horas funcionales</p></div>
+    <div class="kpi"><h2 id="kpiAbap">0.0</h2><p>Horas ABAP</p></div>
+  </div>
+
+  <div class="charts">
+    <div class="card"><h3>Tickets por mes</h3><canvas id="chartMes"></canvas></div>
+    <div class="card"><h3>Horas por mes</h3><canvas id="chartHours"></canvas></div>
+    <div class="card"><h3>Horas por módulo (total)</h3><canvas id="chartMod"></canvas></div>
+    <div class="card"><h3>Distribución por estatus</h3><canvas id="chartStatus"></canvas></div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>Detalle</h3>
+    <table id="tbl" class="display" style="width:100%"></table>
+    <div class="diag" id="diag"></div>
+  </div>
+
+  <!-- Multi-CDN loader (jQuery, DataTables, Chart.js) -->
+  <script>
+    const TITLE_KEY='sp_live_title_v3'; const URL_KEY='sp_live_url_v3';
+    // Small helper
+    function $(sel){ return document.querySelector(sel); }
+    function msg(text,cls){ const s=$('#status'); s.textContent=text; s.className=cls||'muted'; }
+
+    // Loaders
+    function loadScriptSeq(urls){ return new Promise((resolve)=>{ const tryOne=(i)=>{ if(i>=urls.length) return resolve(false); const s=document.createElement('script'); s.src=urls[i]; s.onload=()=>resolve(true); s.onerror=()=>tryOne(i+1); document.head.appendChild(s); }; tryOne(0); }); }
+    async function loadLibs(){
+      const okJQ = await loadScriptSeq(['https://code.jquery.com/jquery-3.7.0.min.js','https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.0/jquery.min.js']);
+      const okDT = await loadScriptSeq(['https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js','https://cdnjs.cloudflare.com/ajax/libs/datatables/1.13.6/jquery.dataTables.min.js']);
+      const okCH = await loadScriptSeq(['https://cdn.jsdelivr.net/npm/chart.js','https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js']);
+      return {okJQ, okDT, okCH};
+    }
+
+    // Data handling
+    function toNumber(x){ const n=parseFloat(String(x).replace(',','.')); return isNaN(n)?0:n; }
+    function computeAggregations(rows){
+      const colMes='Mes Consumo', colMod='Modulo', colSt='Estatus', colId='ID', colHrs='Horas totales', colHF='Hrs funcionales', colHA='Hrs abap', colContacto='Contacto';
+      const recs = rows.map(r=> ({...r}));
+      const summary={tickets:recs.length, hTot:0, hF:0, hA:0}; const byMes={}, byMesHoras={}, byMod={}, bySt={};
+      recs.forEach(r=>{ const ht=toNumber(r[colHrs]); const hf=toNumber(r[colHF]); const ha=toNumber(r[colHA]); summary.hTot+=ht; summary.hF+=hf; summary.hA+=ha; const m=(r[colMes]||'—').trim(); byMes[m]=(byMes[m]||0)+1; byMesHoras[m]=(byMesHoras[m]||0)+ht; const mod=(r[colMod]||'').trim(); byMod[mod]=(byMod[mod]||0)+ht; const st=(r[colSt]||'').trim(); bySt[st]=(bySt[st]||0)+1; });
+      return {recs, summary, byMes, byMesHoras, byMod, bySt};
+    }
+
+    function renderKPIs(agg){ $('#kpiTickets').textContent=agg.summary.tickets.toLocaleString('es-MX'); $('#kpiHoras').textContent=agg.summary.hTot.toLocaleString('es-MX'); $('#kpiFunc').textContent=agg.summary.hF.toLocaleString('es-MX'); $('#kpiAbap').textContent=agg.summary.hA.toLocaleString('es-MX'); }
+
+    let chMes=null, chHours=null, chMod=null, chStatus=null, table=null;
+    function ensureCharts(){ if(!window.Chart) return false; Chart.defaults.color = '#e7eefc'; Chart.defaults.borderColor = '#334155'; return true; }
+    function renderCharts(agg){ if(!ensureCharts()) return; if(chMes) chMes.destroy(); if(chHours) chHours.destroy(); if(chMod) chMod.destroy(); if(chStatus) chStatus.destroy();
+      chMes=new Chart($('#chartMes'),{type:'bar',data:{labels:Object.keys(agg.byMes),datasets:[{data:Object.values(agg.byMes),backgroundColor:'#64a3ff'}]},options:{plugins:{legend:{display:false}}}});
+      chHours=new Chart($('#chartHours'),{type:'line',data:{labels:Object.keys(agg.byMesHoras),datasets:[{data:Object.values(agg.byMesHoras),borderColor:'#64a3ff',backgroundColor:'rgba(100,163,255,.25)',fill:true,tension:.35}]} ,options:{plugins:{legend:{display:false}}}});
+      chMod=new Chart($('#chartMod'),{type:'bar',data:{labels:Object.keys(agg.byMod),datasets:[{data:Object.values(agg.byMod),backgroundColor:'#ffb454'}]},options:{indexAxis:'y',plugins:{legend:{display:false}}}});
+      chStatus=new Chart($('#chartStatus'),{type:'doughnut',data:{labels:Object.keys(agg.bySt),datasets:[{data:Object.values(agg.bySt),backgroundColor:['#64a3ff','#5ad1a5','#ffb454','#ff7b7b','#b39bff','#45e0f1']}]},options:{plugins:{legend:{position:'bottom'}}}});
+    }
+
+    function renderTable(agg){ if(!window.jQuery || !jQuery.fn || !jQuery.fn.dataTable){ $('#diag').textContent='DataTables no disponible (bloqueado por la red). Mostrando tabla simple.'; const t=$('#tbl'); t.innerHTML='<thead><tr>'+Object.keys(agg.recs[0]||{}).map(k=>`<th>${k}</th>`).join('')+'</tr></thead><tbody>'+agg.recs.map(r=>'<tr>'+Object.values(r).map(v=>`<td>${v??''}</td>`).join('')+'</tr>').join('')+'</tbody>'; return; } $('#diag').textContent=''; if(table){ table.destroy(); $('#tbl').innerHTML=''; }
+      const cols = Object.keys(agg.recs[0]||{}).map(k=>({title:k, data:k, name:k})); table=jQuery('#tbl').DataTable({data:agg.recs, columns:cols, pageLength:25, order:[], deferRender:true, autoWidth:true}); }
+
+    async function fetchSP(url){ msg('Cargando desde SharePoint…','muted'); try{ const resp = await fetch(url,{credentials:'include', cache:'no-store'}); if(!resp.ok) throw new Error('HTTP '+resp.status); const ct = resp.headers.get('content-type')||''; if(!ct.includes('application/json')){ msg('Advertencia: el servidor no devolvió JSON (content-type: '+ct+'). ¿Usaste el enlace directo con ?download=1?','warn'); } const data = await resp.json(); msg('OK ('+data.length+' registros)','ok'); return data; }catch(err){ msg('Error: '+err.message,'err'); throw err; } }
+
+    function sampleData(){ return [
+      {"Mes Consumo":"2026-01","ID":"INC-1001","Descripción":"Alta usuario","Modulo":"BASIS","Contacto":"Juan","Estatus":"Cerrado","Hrs funcionales":"1","Hrs abap":"0","Horas totales":"1"},
+      {"Mes Consumo":"2026-01","ID":"INC-1002","Descripción":"Reporte SD","Modulo":"SD","Contacto":"Ana","Estatus":"En progreso","Hrs funcionales":"3","Hrs abap":"2","Horas totales":"5"},
+      {"Mes Consumo":"2026-02","ID":"INC-1003","Descripción":"Ajuste MM","Modulo":"MM","Contacto":"Luis","Estatus":"Abierto","Hrs funcionales":"2","Hrs abap":"0","Horas totales":"2"}
+    ]; }
+
+    // UI wiring
+    (async function init(){ const libs=await loadLibs(); const saved=localStorage.getItem(URL_KEY); if(saved) $('#dataUrl').value=saved; $('#btnSaveUrl').addEventListener('click',()=>{ const v=$('#dataUrl').value.trim(); if(v){ localStorage.setItem(URL_KEY,v); msg('URL guardada','ok'); }}); $('#btnLoad').addEventListener('click', async()=>{ const url=$('#dataUrl').value.trim(); if(!url){ alert('Captura la URL directa a records.json (termina en ?download=1)'); return; } try{ const rows=await fetchSP(url); const agg=computeAggregations(rows); renderKPIs(agg); renderCharts(agg); renderTable(agg); }catch(e){} }); $('#btnSample').addEventListener('click', ()=>{ const rows=sampleData(); const agg=computeAggregations(rows); renderKPIs(agg); renderCharts(agg); renderTable(agg); msg('Datos de muestra cargados','ok'); }); $('#btnTitle').addEventListener('click', ()=>{ const t=$('#titleInput').value; if(t&&t.trim()){ localStorage.setItem(TITLE_KEY,t.trim()); $('#titleText').textContent=t.trim(); }}); })();
+  </script>
+</body>
+</html>
