@@ -126,7 +126,7 @@
 
     const libs = await loadLibs();
 
-    const saved = localStorage.getItem(URL_KEY);
+    const saved = localStorage.getItem('dashboardUrl');
     if (saved) {
         $('#dataUrl').val(saved);
     }
@@ -135,7 +135,7 @@
     $('#btnSaveUrl').on('click', function () {
         const v = $('#dataUrl').val().trim();
         if (v) {
-            localStorage.setItem(URL_KEY, v);
+            localStorage.setItem('dashboardUrl', v);
             msg('URL guardada', 'ok');
         }
     });
