@@ -122,12 +122,53 @@
     ]; }
 
     // UI wiring
-    (async function init(){ const libs=await loadLibs(); const saved=localStorage.getItem(URL_KEY); if(saved) $('#dataUrl').value=saved;$('#btnSaveUrl').on('click', () => { const v = $('#dataUrl').val().trim();  if(v){ localStorage.setItem(URL_KEY,v); msg('URL guardada','ok'); }}); $('#btnLoad').addEventListener('click', async()=>{ const url=$('#dataUrl').value.trim(); if(!url){ alert('Captura la URL directa a records.json (termina en ?download=1)'); return; } try{ const rows=await fetchSP(url); const agg=computeAggregations(rows); renderKPIs(agg); renderCharts(agg); renderTable(agg); }catch(e){} }); $('#algo').on('click', ()=>{ const rows=sampleData(); const agg=computeAggregations(rows); renderKPIs(agg); renderCharts(agg); renderTable(agg); msg('Datos de muestra cargados','ok'); });$('#btnLoad').on('click', ...)$('#btnLoad').on('click', function() {
-    const t = $('#titleInput').val();
-    if (t && t.trim()) {
-        localStorage.setItem('dashboardTitle', t.trim());
-        location.reload();
+    (async function init() {
+
+    const libs = await loadLibs();
+
+    const saved = localStorage.getItem(URL_KEY);
+    if (saved) {
+        $('#dataUrl').val(saved);
     }
-});
-</body>
+
+    // Guardar URL
+    $('#btnSaveUrl').on('click', function () {
+        const v = $('#dataUrl').val().trim();
+        if (v) {
+            localStorage.setItem(URL_KEY, v);
+            msg('URL guardada', 'ok');
+        }
+    });
+
+    // Cargar desde SharePoint / JSON
+    $('#btnLoad').on('click', async function () {
+        const url = $('#dataUrl').val().trim();
+
+        if (!url) {
+            alert('Captura la URL directa a records.json');
+            return;
+        }
+
+        try {
+            const rows = await fetchSP(url);
+            const agg = computeAggregations(rows);
+            renderKPIs(agg);
+            renderCharts(agg);
+            renderTable(agg);
+        } catch (e) {
+            console.error(e);
+        }
+    });
+
+    // Cargar datos de muestra
+    $('#btnSample').on('click', function () {
+        const rows = sampleData();
+        const agg = computeAggregations(rows);
+        renderKPIs(agg);
+        renderCharts(agg);
+        renderTable(agg);
+        msg('Datos de muestra cargados', 'ok');
+    });
+
+})();
 </html>
