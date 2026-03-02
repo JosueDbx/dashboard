@@ -92,12 +92,45 @@
     // Data handling
     function toNumber(x){ const n=parseFloat(String(x).replace(',','.')); return isNaN(n)?0:n; }
     function computeAggregations(rows){
-      const colMes='Mes Consumo', colMod='Modulo', colSt='Estatus', colId='ID', colHrs='Horas totales', colHF='Hrs funcionales', colHA='Hrs abap', colContacto='Contacto';
-      const recs = rows.map(r=> ({...r}));
-      const summary={tickets:recs.length, hTot:0, hF:0, hA:0}; const byMes={}, byMesHoras={}, byMod={}, bySt={};
-      recs.forEach(r=>{ const ht=toNumber(r[colHrs]); const hf=toNumber(r[colHF]); const ha=toNumber(r[colHA]); summary.hTot+=ht; summary.hF+=hf; summary.hA+=ha; const m=(r[colMes]||'—').trim(); byMes[m]=(byMes[m]||0)+1; byMesHoras[m]=(byMesHoras[m]||0)+ht; const mod=(r[colMod]||'').trim(); byMod[mod]=(byMod[mod]||0)+ht; const st=(r[colSt]||'').trim(); bySt[st]=(bySt[st]||0)+1; });
-      return {recs, summary, byMes, byMesHoras, byMod, bySt};
+
+  const agg = {
+    total: rows.length,
+    byMes: {},
+    byMod: {},
+    bySt: {},
+    totalHoras: 0,
+    totalFunc: 0,
+    totalAbap: 0,
+    recs: rows
+  };
+
+  rows.forEach(r => {
+
+    // ===== Mes (desde Fecha de creacion)
+    const fecha = r["Fecha de creacion"];
+    let mes = "Sin fecha";
+
+    if (fecha) {
+      const d = new Date(fecha);
+      if (!isNaN(d)) {
+        mes = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,'0');
+      }
     }
+
+    agg.byMes[mes] = (agg.byMes[mes] || 0) + 1;
+
+    // ===== Módulo
+    const mod = r["Modulo"] || "Sin módulo";
+    agg.byMod[mod] = (agg.byMod[mod] || 0) + 1;
+
+    // ===== Estatus
+    const st = r["Estatus"] || "Sin estatus";
+    agg.bySt[st] = (agg.bySt[st] || 0) + 1;
+
+  });
+
+  return agg;
+}
 
     function renderKPIs(agg){ $('#kpiTickets').textContent=agg.summary.tickets.toLocaleString('es-MX'); $('#kpiHoras').textContent=agg.summary.hTot.toLocaleString('es-MX'); $('#kpiFunc').textContent=agg.summary.hF.toLocaleString('es-MX'); $('#kpiAbap').textContent=agg.summary.hA.toLocaleString('es-MX'); }
 
