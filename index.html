@@ -113,8 +113,19 @@
     function renderTable(agg){ if(!window.jQuery || !jQuery.fn || !jQuery.fn.dataTable){ $('#diag').textContent='DataTables no disponible (bloqueado por la red). Mostrando tabla simple.'; const t=$('#tbl'); t.innerHTML='<thead><tr>'+Object.keys(agg.recs[0]||{}).map(k=>`<th>${k}</th>`).join('')+'</tr></thead><tbody>'+agg.recs.map(r=>'<tr>'+Object.values(r).map(v=>`<td>${v??''}</td>`).join('')+'</tr>').join('')+'</tbody>'; return; } $('#diag').textContent=''; if(table){ table.destroy(); $('#tbl').innerHTML=''; }
       const cols = Object.keys(agg.recs[0]||{}).map(k=>({title:k, data:k, name:k})); table=jQuery('#tbl').DataTable({data:agg.recs, columns:cols, pageLength:25, order:[], deferRender:true, autoWidth:true}); }
 
-    async function fetchSP(url){ msg('Cargando desde SharePoint…','muted'); try{ const resp = await fetch(url);{credentials:'include', cache:'no-store'}); if(!resp.ok) throw new Error('HTTP '+resp.status); const ct = resp.headers.get('content-type')||''; if(!ct.includes('application/json')){ msg('Advertencia: el servidor no devolvió JSON (content-type: '+ct+'). ¿Usaste el enlace directo con ?download=1?','warn'); } const data = await resp.json(); msg('OK ('+data.length+' registros)','ok'); return data; }catch(err){ msg('Error: '+err.message,'err'); throw err; } }
-
+async function fetchSP(url){
+  msg('Cargando desde SharePoint…','muted');
+  try{
+    const resp = await fetch(url);
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    const data = await resp.json();
+    msg('OK ('+data.length+' registros)','ok');
+    return data;
+  }catch(err){
+    msg('Error: '+err.message,'err');
+    throw err;
+  }
+}
     function sampleData(){ return [
       {"Mes Consumo":"2026-01","ID":"INC-1001","Descripción":"Alta usuario","Modulo":"BASIS","Contacto":"Juan","Estatus":"Cerrado","Hrs funcionales":"1","Hrs abap":"0","Horas totales":"1"},
       {"Mes Consumo":"2026-01","ID":"INC-1002","Descripción":"Reporte SD","Modulo":"SD","Contacto":"Ana","Estatus":"En progreso","Hrs funcionales":"3","Hrs abap":"2","Horas totales":"5"},
