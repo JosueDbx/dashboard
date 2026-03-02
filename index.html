@@ -135,7 +135,11 @@ async function fetchSP(url){
     // UI wiring
     (async function init() {
 
-    const libs = await loadLibs();
+    try {
+  await loadLibs();
+} catch (e) {
+  console.warn('Librerías no cargadas, continuando...');
+}
 
     const saved = localStorage.getItem('dashboardUrl');
     if (saved) {
