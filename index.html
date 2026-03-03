@@ -13,7 +13,7 @@
 --txt:#e7eefc; --muted:#a9c0ea;
 }
 html,body{background:var(--bg);color:var(--txt);}
-body{font-family:system-ui;margin:20px}
+body{font-family:system-ui;margin:20px;transition:all .3s ease}
 .panel{display:flex;gap:10px;flex-wrap:wrap;
 background:var(--panel);border:1px solid var(--bd);
 padding:10px;border-radius:10px;margin-bottom:15px}
@@ -26,8 +26,8 @@ border-radius:8px}
 grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
 gap:12px;margin:12px 0}
 .kpi{background:#0d2140;border:1px solid var(--bd);
-border-radius:10px;padding:12px}
-.kpi h2{margin:0;font-size:26px}
+border-radius:10px;padding:12px;text-align:center}
+.kpi h2{margin:0;font-size:28px}
 .kpi p{margin:4px 0 0;color:var(--muted)}
 .charts{display:grid;
 grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
@@ -39,9 +39,11 @@ canvas{max-height:340px}
 table{width:100%;border-collapse:collapse}
 th,td{border:1px solid #143055;padding:6px}
 th{background:#0d2140}
-.muted{color:var(--muted)}
-.ok{color:#22c55e}
-.err{color:#ef4444}
+.hidden{display:none}
+.presentation .panel,
+.presentation #detailSection{display:none}
+.presentation .kpi-grid{grid-template-columns:repeat(5,1fr)}
+.presentation canvas{max-height:500px}
 </style>
 </head>
 
@@ -49,43 +51,41 @@ th{background:#0d2140}
 
 <h1>Dashboard Mesa de Ayuda — Executive</h1>
 
-<div class="panel">
+<div class="panel" id="controlPanel">
 <input id="dataUrl" class="input" style="flex:1"
 placeholder="Pega aquí la URL directa de records.json"/>
 <button class="btn" id="btnSaveUrl">Guardar URL</button>
 <button class="btn" id="btnLoad">Cargar ahora</button>
 <button class="btn" id="btnSample">Cargar muestra</button>
 <button class="btn" id="btnExport">Exportar Excel</button>
-<small id="status" class="muted">Listo</small>
+<button class="btn" id="btnPresentation">Modo Presentación</button>
+<small id="status">Listo</small>
 </div>
 
 <div class="panel">
 <label>Módulo:</label>
-<select id="modFilter" class="input">
-<option value="ALL">Todos</option>
-</select>
+<select id="modFilter"><option value="ALL">Todos</option></select>
 
 <label>Estatus:</label>
-<select id="statusFilter" class="input">
-<option value="ALL">Todos</option>
-</select>
+<select id="statusFilter"><option value="ALL">Todos</option></select>
 </div>
 
 <div class="kpi-grid">
-<div class="kpi"><h2 id="kpiTickets">0</h2><p>Total tickets</p></div>
-<div class="kpi"><h2 id="kpiHoras">0</h2><p>Horas totales</p></div>
-<div class="kpi"><h2 id="kpiFunc">0</h2><p>Horas funcionales</p></div>
+<div class="kpi"><h2 id="kpiTickets">0</h2><p>Total Tickets</p></div>
+<div class="kpi"><h2 id="kpiHoras">0</h2><p>Horas Totales</p></div>
+<div class="kpi"><h2 id="kpiFunc">0</h2><p>Horas Funcionales</p></div>
 <div class="kpi"><h2 id="kpiAbap">0</h2><p>Horas ABAP</p></div>
+<div class="kpi"><h2 id="kpiProd">0</h2><p>Productividad Promedio (hrs/ticket)</p></div>
 </div>
 
 <div class="charts">
-<div class="card"><h3>Tickets por mes</h3><canvas id="chartMes"></canvas></div>
-<div class="card"><h3>Horas por mes</h3><canvas id="chartHours"></canvas></div>
-<div class="card"><h3>Horas por módulo</h3><canvas id="chartMod"></canvas></div>
-<div class="card"><h3>Distribución por estatus</h3><canvas id="chartStatus"></canvas></div>
+<div class="card"><h3>Tickets por Mes</h3><canvas id="chartMes"></canvas></div>
+<div class="card"><h3>Horas por Mes</h3><canvas id="chartHours"></canvas></div>
+<div class="card"><h3>Horas por Módulo</h3><canvas id="chartMod"></canvas></div>
+<div class="card"><h3>Distribución por Estatus</h3><canvas id="chartStatus"></canvas></div>
 </div>
 
-<div class="card" style="margin-top:20px">
+<div class="card" id="detailSection" style="margin-top:20px">
 <h3>Detalle</h3>
 <input id="searchInput" class="input" placeholder="Buscar..."
 style="margin-bottom:10px;width:100%"/>
@@ -93,14 +93,9 @@ style="margin-bottom:10px;width:100%"/>
 </div>
 
 <script>
+
 let globalRows=[];
 let chMes,chHours,chMod,chStatus;
-
-function msg(text,cls){
-const s=document.getElementById('status');
-s.textContent=text;
-s.className=cls||'muted';
-}
 
 function toNumber(x){
 const n=parseFloat(String(x||0).replace(',','.'));
@@ -108,37 +103,33 @@ return isNaN(n)?0:n;
 }
 
 function populateFilters(rows){
+const modSel=document.getElementById('modFilter');
+const stSel=document.getElementById('statusFilter');
 
-const modSelect=document.getElementById('modFilter');
-const statusSelect=document.getElementById('statusFilter');
+const mods=[...new Set(rows.map(r=>r["Modulo"]||"Sin módulo"))].sort();
+const sts=[...new Set(rows.map(r=>r["Estatus"]||"Sin estatus"))].sort();
 
-const modules=[...new Set(rows.map(r=>r["Modulo"]||"Sin módulo"))].sort();
-const statuses=[...new Set(rows.map(r=>r["Estatus"]||"Sin estatus"))].sort();
+modSel.innerHTML='<option value="ALL">Todos</option>';
+stSel.innerHTML='<option value="ALL">Todos</option>';
 
-modSelect.innerHTML='<option value="ALL">Todos</option>';
-statusSelect.innerHTML='<option value="ALL">Todos</option>';
-
-modules.forEach(m=>{
-const opt=document.createElement('option');
-opt.value=m; opt.textContent=m;
-modSelect.appendChild(opt);
+mods.forEach(m=>{
+const o=document.createElement('option');
+o.value=m;o.textContent=m;modSel.appendChild(o);
 });
-
-statuses.forEach(s=>{
-const opt=document.createElement('option');
-opt.value=s; opt.textContent=s;
-statusSelect.appendChild(opt);
+sts.forEach(s=>{
+const o=document.createElement('option');
+o.value=s;o.textContent=s;stSel.appendChild(o);
 });
 }
 
 function computeAggregations(rows){
 
-const modSel=document.getElementById('modFilter').value;
-const stSel=document.getElementById('statusFilter').value;
+const mod=document.getElementById('modFilter').value;
+const st=document.getElementById('statusFilter').value;
 
 const recs=rows
-.filter(r=>(modSel==="ALL"||r["Modulo"]===modSel))
-.filter(r=>(stSel==="ALL"||r["Estatus"]===stSel))
+.filter(r=>(mod==="ALL"||r["Modulo"]===mod))
+.filter(r=>(st==="ALL"||r["Estatus"]===st))
 .map(r=>({
 ...r,
 hF:toNumber(r["Hrs funcionales"]),
@@ -147,6 +138,7 @@ hT:toNumber(r["Horas totales"])
 }));
 
 const summary={tickets:recs.length,hTot:0,hF:0,hA:0};
+
 const byMes={},byMesHoras={},byMod={},bySt={};
 
 recs.forEach(r=>{
@@ -167,14 +159,17 @@ byMod[r["Modulo"]||"Sin módulo"]=(byMod[r["Modulo"]||"Sin módulo"]||0)+r.hT;
 bySt[r["Estatus"]||"Sin estatus"]=(bySt[r["Estatus"]||"Sin estatus"]||0)+1;
 });
 
+summary.productividad = summary.tickets>0 ? (summary.hTot/summary.tickets) : 0;
+
 return{recs,summary,byMes,byMesHoras,byMod,bySt};
 }
 
 function renderKPIs(agg){
-document.getElementById('kpiTickets').textContent=agg.summary.tickets;
-document.getElementById('kpiHoras').textContent=agg.summary.hTot.toFixed(1);
-document.getElementById('kpiFunc').textContent=agg.summary.hF.toFixed(1);
-document.getElementById('kpiAbap').textContent=agg.summary.hA.toFixed(1);
+kpiTickets.textContent=agg.summary.tickets;
+kpiHoras.textContent=agg.summary.hTot.toFixed(1);
+kpiFunc.textContent=agg.summary.hF.toFixed(1);
+kpiAbap.textContent=agg.summary.hA.toFixed(1);
+kpiProd.textContent=agg.summary.productividad.toFixed(2);
 }
 
 function renderCharts(agg){
@@ -187,22 +182,25 @@ if(chStatus)chStatus.destroy();
 chMes=new Chart(chartMes,{
 type:'bar',
 data:{labels:Object.keys(agg.byMes),
-datasets:[{label:'Tickets',data:Object.values(agg.byMes),
+datasets:[{label:'Tickets',
+data:Object.values(agg.byMes),
 backgroundColor:'#64a3ff'}]}
 });
 
 chHours=new Chart(chartHours,{
 type:'line',
 data:{labels:Object.keys(agg.byMesHoras),
-datasets:[{label:'Horas',data:Object.values(agg.byMesHoras),
-borderColor:'#5ad1a5',backgroundColor:'rgba(90,209,165,.2)',
-fill:true,tension:.3}]}
+datasets:[{label:'Horas',
+data:Object.values(agg.byMesHoras),
+borderColor:'#5ad1a5',
+backgroundColor:'rgba(90,209,165,.2)',
+fill:true}]}
 });
 
 chMod=new Chart(chartMod,{
 type:'bar',
 data:{labels:Object.keys(agg.byMod),
-datasets:[{label:'Horas por módulo',
+datasets:[{label:'Horas',
 data:Object.values(agg.byMod),
 backgroundColor:'#ffb454'}]},
 options:{indexAxis:'y'}
@@ -217,15 +215,18 @@ backgroundColor:['#64a3ff','#5ad1a5','#ffb454',
 });
 }
 
-function renderTable(agg){
+function updateDashboard(){
+const agg=computeAggregations(globalRows);
+renderKPIs(agg);
+renderCharts(agg);
+renderTable(agg);
+}
 
+function renderTable(agg){
 const table=document.getElementById('detailTable');
 const search=document.getElementById('searchInput');
 
-if(!agg.recs.length){
-table.innerHTML="<tr><td>Sin datos</td></tr>";
-return;
-}
+if(!agg.recs.length){table.innerHTML="<tr><td>Sin datos</td></tr>";return;}
 
 const headers=Object.keys(agg.recs[0]);
 
@@ -249,39 +250,13 @@ String(v).toLowerCase().includes(term)
 };
 }
 
-function updateDashboard(){
-const agg=computeAggregations(globalRows);
-renderKPIs(agg);
-renderCharts(agg);
-renderTable(agg);
-}
-
-async function fetchSP(url){
-msg('Cargando...','muted');
-try{
-const r=await fetch(url);
-if(!r.ok)throw new Error(r.status);
-const data=await r.json();
-msg('OK ('+data.length+' registros)','ok');
-return data;
-}catch(e){
-msg('Error HTTP '+e.message,'err');
-return null;
-}
-}
-
 function exportToExcel(){
-
 const agg=computeAggregations(globalRows);
-if(!agg.recs.length)return;
-
 let csv=Object.keys(agg.recs[0]).join(",")+"\n";
-
 agg.recs.forEach(r=>{
 csv+=Object.values(r).map(v=>`"${v??''}"`).join(",")+"\n";
 });
-
-const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
+const blob=new Blob([csv],{type:"text/csv"});
 const link=document.createElement("a");
 link.href=URL.createObjectURL(blob);
 link.download="dashboard_export.csv";
@@ -290,27 +265,17 @@ link.click();
 
 document.addEventListener('DOMContentLoaded',function(){
 
-const input=document.getElementById('dataUrl');
-const saved=localStorage.getItem('dashboardUrl');
-if(saved)input.value=saved;
-
-document.getElementById('btnSaveUrl').onclick=()=>{
-const v=input.value.trim();
-if(v){localStorage.setItem('dashboardUrl',v);
-msg('URL guardada','ok');}
-};
-
-document.getElementById('btnLoad').onclick=async()=>{
-const url=input.value.trim();
-if(!url){alert('Captura la URL');return;}
-const rows=await fetchSP(url);
-if(!rows)return;
+btnLoad.onclick=async()=>{
+const url=dataUrl.value.trim();
+if(!url)return;
+const r=await fetch(url);
+const rows=await r.json();
 globalRows=rows;
 populateFilters(rows);
 updateDashboard();
 };
 
-document.getElementById('btnSample').onclick=()=>{
+btnSample.onclick=()=>{
 globalRows=[
 {"Fecha de creacion":"2026-01-10","Modulo":"SD","Estatus":"Cerrado","Hrs funcionales":"2","Hrs abap":"1","Horas totales":"3"},
 {"Fecha de creacion":"2026-01-15","Modulo":"MM","Estatus":"Abierto","Hrs funcionales":"1","Hrs abap":"0","Horas totales":"1"},
@@ -318,15 +283,19 @@ globalRows=[
 ];
 populateFilters(globalRows);
 updateDashboard();
-msg('Datos de muestra cargados','ok');
 };
 
-document.getElementById('btnExport').onclick=exportToExcel;
+btnExport.onclick=exportToExcel;
 
-document.getElementById('modFilter').onchange=updateDashboard;
-document.getElementById('statusFilter').onchange=updateDashboard;
+modFilter.onchange=updateDashboard;
+statusFilter.onchange=updateDashboard;
+
+btnPresentation.onclick=()=>{
+document.body.classList.toggle('presentation');
+};
 
 });
+
 </script>
 
 </body>
